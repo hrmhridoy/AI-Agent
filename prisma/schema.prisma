@@ -1,0 +1,163 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum UserRole {
+  ADMIN
+  USER
+}
+
+enum ProductStatus {
+  DRAFT
+  PUBLISHED
+  FAILED
+  SCHEDULED
+}
+
+enum ImportJobStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum LogLevel {
+  INFO
+  WARN
+  ERROR
+}
+
+enum LogCategory {
+  IMPORT
+  AI
+  WOOCOMMERCE
+  SYSTEM
+}
+
+model User {
+  id        String   @id @default(cuid())
+  supabaseId String  @unique @map("supabase_id")
+  name      String
+  email     String   @unique
+  role      UserRole @default(USER)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  products   Product[]
+  importJobs ImportJob[]
+  logs       Log[]
+  blogPosts  BlogPost[]
+
+  @@map("users")
+}
+
+model Settings {
+  id                      String   @id @default(cuid())
+  aiApiKey                String?  @map("ai_api_key")
+  aiBaseUrl               String?  @map("ai_base_url")
+  aiModel                 String?  @default("gpt-4o-mini") @map("ai_model")
+  woocommerceUrl          String?  @map("woocommerce_url")
+  woocommerceConsumerKey  String?  @map("woocommerce_consumer_key")
+  woocommerceConsumerSecret String? @map("woocommerce_consumer_secret")
+  wordpressUrl            String?  @map("wordpress_url")
+  wordpressUsername       String?  @map("wordpress_username")
+  wordpressAppPassword    String?  @map("wordpress_app_password")
+  createdAt               DateTime @default(now()) @map("created_at")
+  updatedAt               DateTime @updatedAt @map("updated_at")
+
+  @@map("settings")
+}
+
+model Product {
+  id               String        @id @default(cuid())
+  userId           String        @map("user_id")
+  sourceUrl        String        @map("source_url")
+  affiliateUrl     String?       @map("affiliate_url")
+  title            String?
+  seoTitle         String?       @map("seo_title")
+  seoDescription   String?       @map("seo_description")
+  canonicalUrl     String?       @map("canonical_url")
+  shortDescription String?       @map("short_description")
+  fullDescription  String?       @map("full_description")
+  price            String?
+  currency         String?       @default("USD")
+  images           Json          @default("[]")
+  category         String?
+  tags             String[]      @default([])
+  specifications   Json          @default("[]")
+  features         String[]      @default([])
+  rawExtractedData Json?         @map("raw_extracted_data")
+  seoData          Json?         @map("seo_data")
+  status           ProductStatus @default(DRAFT)
+  woocommerceId    Int?          @map("woocommerce_id")
+  scheduledAt      DateTime?     @map("scheduled_at")
+  retryCount       Int           @default(0) @map("retry_count")
+  createdAt        DateTime      @default(now()) @map("created_at")
+  updatedAt        DateTime      @updatedAt @map("updated_at")
+
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  blogPosts BlogPost[]
+
+  @@unique([userId, sourceUrl])
+  @@index([userId, status])
+  @@index([sourceUrl])
+  @@map("products")
+}
+
+model ImportJob {
+  id          String          @id @default(cuid())
+  userId      String          @map("user_id")
+  sourceUrl   String          @map("source_url")
+  status      ImportJobStatus @default(PENDING)
+  startedAt   DateTime?       @map("started_at")
+  completedAt DateTime?       @map("completed_at")
+  logs        Json            @default("[]")
+  productId   String?         @map("product_id")
+  error       String?
+  retryCount  Int             @default(0) @map("retry_count")
+  createdAt   DateTime        @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+  @@map("import_jobs")
+}
+
+model Log {
+  id        String      @id @default(cuid())
+  userId    String?     @map("user_id")
+  level     LogLevel    @default(INFO)
+  category  LogCategory
+  message   String
+  metadata  Json?
+  createdAt DateTime    @default(now()) @map("created_at")
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([category, createdAt])
+  @@map("logs")
+}
+
+model BlogPost {
+  id          String   @id @default(cuid())
+  userId      String   @map("user_id")
+  productId   String   @map("product_id")
+  title       String
+  content     String
+  faq         Json     @default("[]")
+  pros        String[] @default([])
+  cons        String[] @default([])
+  wordpressId Int?     @map("wordpress_id")
+  published   Boolean  @default(false)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@map("blog_posts")
+}
